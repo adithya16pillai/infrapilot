@@ -1,8 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { LayoutDashboard, RotateCcw, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { RotateCcw, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
@@ -177,13 +176,6 @@ function CityView() {
         </div>
 
         <div className="flex items-center gap-5">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-500 transition hover:text-neutral-200"
-          >
-            <LayoutDashboard className="h-3.5 w-3.5" />
-            Dashboard
-          </Link>
           <button
             onClick={resetCity}
             className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-500 transition hover:text-neutral-200"

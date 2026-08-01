@@ -61,12 +61,12 @@ export default function AssetsPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="font-mono text-[10px] tracking-wider text-neutral-600 uppercase">
-                  <th className="pb-2 font-normal">Asset</th>
-                  <th className="pb-2 font-normal">Type</th>
-                  <th className="pb-2 text-right font-normal">Criticality</th>
-                  <th className="pb-2 text-right font-normal">Supplies</th>
-                  <th className="pb-2 text-right font-normal">Findings</th>
-                  <th className="pb-2 font-normal">Status</th>
+                  <th className="pb-2 pr-4 font-normal">Asset</th>
+                  <th className="pb-2 pr-4 font-normal">Type</th>
+                  <th className="pb-2 pr-6 text-right font-normal">Criticality</th>
+                  <th className="pb-2 pr-6 text-right font-normal">Supplies</th>
+                  <th className="pb-2 pr-10 text-right font-normal">Findings</th>
+                  <th className="pb-2 pl-2 font-normal">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -77,7 +77,7 @@ export default function AssetsPage() {
                       key={asset.id}
                       className="border-t border-[var(--ip-grey-800)] text-[12.5px] transition hover:bg-white/5"
                     >
-                      <td className="py-2">
+                      <td className="py-2 pr-4">
                         <Link
                           href={`/city?asset=${asset.id}`}
                           className="block text-neutral-200 hover:text-[var(--ip-blue)]"
@@ -89,16 +89,16 @@ export default function AssetsPage() {
                           </span>
                         </Link>
                       </td>
-                      <td className="py-2 font-mono text-[11px] text-neutral-500">
+                      <td className="py-2 pr-4 font-mono text-[11px] text-neutral-500">
                         {asset.type}
                       </td>
-                      <td className="py-2 text-right font-mono text-neutral-200">
+                      <td className="py-2 pr-6 text-right font-mono text-neutral-200">
                         {asset.criticality}
                       </td>
-                      <td className="py-2 text-right font-mono text-neutral-400">
+                      <td className="py-2 pr-6 text-right font-mono text-neutral-400">
                         {dependents[asset.id] ?? 0}
                       </td>
-                      <td className="py-2 text-right font-mono">
+                      <td className="py-2 pr-10 text-right font-mono">
                         {counts[asset.id] ? (
                           <span className="text-[var(--ip-orange)]">
                             {counts[asset.id]}
@@ -107,7 +107,7 @@ export default function AssetsPage() {
                           <span className="text-neutral-700">—</span>
                         )}
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 pl-2">
                         <span
                           className={`rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase ${STATUS[asset.status]}`}
                         >
