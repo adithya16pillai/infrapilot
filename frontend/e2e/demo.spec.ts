@@ -87,8 +87,10 @@ test("agent picks analyses per question (F4 autonomy proof)", async ({ page }) =
   await page.goto("/city");
   await expect(page.getByTestId("node-control_centre")).toBeVisible({ timeout: 15_000 });
 
-  // A structural question must NOT run a cascade.
-  await page.getByTestId("preset-spof_analysis").click();
+  // A structural question must NOT run a cascade. Asked free-text: there is
+  // deliberately no preset chip for it, so this also exercises the query box.
+  await page.getByTestId("query-input").fill("What is our biggest single point of failure?");
+  await page.getByTestId("query-input").press("Enter");
   await expect(page.getByText("Mapping structural dependencies")).toBeVisible({
     timeout: 20_000,
   });

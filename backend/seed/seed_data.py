@@ -270,11 +270,6 @@ SCENARIO_PRESETS = [
         "label": "PLC compromise",
         "query": "Simulate a PLC compromise at the Water Treatment Plant",
     },
-    {
-        "id": "spof_analysis",
-        "label": "Biggest single point of failure?",
-        "query": "What is our biggest single point of failure?",
-    },
 ]
 
 # --- Mock OSSPrey findings (F6) ---------------------------------------------

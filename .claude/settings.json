@@ -50,7 +50,8 @@
       "Bash(timeout 400 npx playwright test)",
       "Bash(curl -s http://127.0.0.1:8000/api/dashboard)",
       "Bash(timeout 300 npx playwright test)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(curl -s http://127.0.0.1:8000/api/graph)"
     ]
   }
 }

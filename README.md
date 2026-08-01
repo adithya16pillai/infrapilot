@@ -69,7 +69,7 @@ graph state it produced, `/city?asset=<id>` opens that asset's detail sheet, and
 | 0:00 | Landing | 12 interdependent assets. Resilience **84** — not 100, because the city already carries five known posture issues (degraded telecom ring, data-centre cooling fault, unpatched VPN gateway, Substation B at reduced capacity, generator overdue service). |
 | 0:20 | Click *Ransomware on Control Centre* | The agent's investigation streams step by step: resolve → cascade → metrics → rank. |
 | 0:50 | The cascade lands | Control Centre → Substation A → Traffic Management fail. Hospital, Emergency Services and the Water Plant degrade. Score counts down **84 → 43**. ~348,000 residents affected. |
-| 1:20 | "The agent chose which analyses to run" | Click *Biggest single point of failure?* — it runs `graph_metrics` **only**, no cascade. Same agent, different plan. |
+| 1:20 | "The agent chose which analyses to run" | Type *What is our biggest single point of failure?* — it runs `graph_metrics` **only**, no cascade. Same agent, different plan. |
 | 1:50 | Supply chain | Open the Control Centre. The same-severity flagged package outranks the Data Centre's because its cascade reaches the Hospital. |
 | 2:15 | Approve *Segment Control Centre / Substation A control plane* | Score climbs **43 → 57**. Approve two more: **→ 68**. "The AI recommends. The human approves. Nothing touches live systems." |
 | 2:45 | `/dashboard` | Posture, trend, pending approvals, impact-ranked supply chain risks. |
