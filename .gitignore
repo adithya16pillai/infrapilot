@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Next
+node_modules/
+.next/
+out/
+build/
+.vercel/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+
+# Local run artifacts
+*.log
+shot-*.png
+probe*.mjs

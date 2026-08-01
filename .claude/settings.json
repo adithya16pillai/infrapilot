@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --yes create-next-app@latest frontend --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(node -e \"const p=require\\('./frontend/package.json'\\); console.log\\('next', p.dependencies.next, '| react', p.dependencies.react, '| tailwind', \\(p.devDependencies||{}\\).tailwindcss\\)\")",
+      "Bash(npx --yes shadcn@latest init -d --yes)",
+      "Bash(npx --yes shadcn@latest add card badge button dialog sheet command tabs progress sonner table skeleton separator tooltip --yes --overwrite)",
+      "Bash(npm install *)",
+      "Bash(python -m seed.calibrate)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(JSON.stringify\\(p.dependencies,null,1\\)\\)\")",
+      "Bash(python -m pytest tests/ -q)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(python -m seed.seed --reset)",
+      "Bash(python -m uvicorn app.main:app --port 8000 --log-level warning)",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/reset)",
+      "Bash(python -m uvicorn app.main:app --port 8000 --reload --log-level warning)",
+      "Bash(grep -iE \"^#{1,3} |breaking|removed|no longer|must now|async|deprecat\" node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"TSC_EXIT:$?\")",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"frontend :3000 -> %{http_code}\\\\n\" http://127.0.0.1:3000/)",
+      "Bash(curl -s -o /dev/null -w \"backend  :8000 -> %{http_code}\\\\n\" http://127.0.0.1:8000/api/health)",
+      "Bash(npx playwright *)",
+      "Bash(cp /tmp/probe.mjs ./probe.mjs)",
+      "Bash(node probe.mjs)",
+      "Bash(curl -s http://127.0.0.1:3000/)",
+      "Bash(node probe3.mjs)",
+      "Bash(sed -i 's/3100/3000/' probe6.mjs)",
+      "Bash(node probe6.mjs)",
+      "Bash(curl -s -o /dev/null http://127.0.0.1:3000/)",
+      "Bash(node probe7.mjs)",
+      "Bash(rm -f probe*.mjs)",
+      "Bash(node shot.mjs)",
+      "Bash(git add *)"
+    ]
+  }
+}

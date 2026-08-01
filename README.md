@@ -1,0 +1,156 @@
+# InfraPilot
+
+**AI resilience copilot for critical infrastructure.** Describe an attack in plain
+English; an agent decides which analyses to run, a NetworkX engine computes the
+cascade, and every mitigation it offers is scored by re-simulation — not by an LLM
+guessing a number.
+
+Built for the Cursor Cybersecurity London hackathon.
+
+---
+
+## Run it
+
+Two terminals, no cloud accounts, no API keys required.
+
+```bash
+# 1. Backend  (http://127.0.0.1:8000)
+cd backend
+pip install -r requirements.txt
+python -m seed.seed --reset
+python -m uvicorn app.main:app --port 8000
+
+# 2. Frontend (http://localhost:3000)
+cd frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:3000**.
+
+To enable the Claude planner, `cp backend/.env.example backend/.env` and set
+`ANTHROPIC_API_KEY`. Everything works without it — see *Degradation* below.
+
+---
+
+## The demo (3 minutes)
+
+| Time | Beat | What you see |
+|---|---|---|
+| 0:00 | Landing | 12 interdependent assets. Resilience **84** — not 100, because the city already carries five known posture issues (degraded telecom ring, data-centre cooling fault, unpatched VPN gateway, Substation B at reduced capacity, generator overdue service). |
+| 0:20 | Click *Ransomware on Control Centre* | The agent's investigation streams step by step: resolve → cascade → metrics → rank. |
+| 0:50 | The cascade lands | Control Centre → Substation A → Traffic Management fail. Hospital, Emergency Services and the Water Plant degrade. Score counts down **84 → 43**. ~348,000 residents affected. |
+| 1:20 | "The agent chose which analyses to run" | Click *Biggest single point of failure?* — it runs `graph_metrics` **only**, no cascade. Same agent, different plan. |
+| 1:50 | Supply chain | Open the Control Centre. The same-severity flagged package outranks the Data Centre's because its cascade reaches the Hospital. |
+| 2:15 | Approve *Segment Control Centre / Substation A control plane* | Score climbs **43 → 57**. Approve two more: **→ 68**. "The AI recommends. The human approves. Nothing touches live systems." |
+| 2:45 | `/dashboard` | Posture, trend, pending approvals, impact-ranked supply chain risks. |
+
+Hit **Reset city** between runs.
+
+### The demo numbers are measured, not chosen
+
+The PRD sketched 84 → 61 → 88 before the engine existed. The engine says
+**84 → 43 → 68**, so the script quotes the engine. `python -m seed.calibrate`
+prints these from the seed graph, and `tests/test_cascade.py` pins them, so a
+seed edit fails a test rather than surprising you on stage.
+
+---
+
+## How it works
+
+```
+Next.js :3000  ──REST──▶  FastAPI :8000  ──▶ app/engine/  (pure NetworkX)
+     ▲                         │
+     └────── SSE ──────────────┤──▶ app/agent/   Claude tool-use loop │ rule router
+      /simulations/{id}/stream ├──▶ app/osprey/  mock │ live
+                               └──▶ SQLite       (the PRD's Postgres schema, verbatim)
+```
+
+`app/engine/` is pure: dict in, dict out, no I/O. That is what lets the identical
+code run in-process, inside a pytest, or inside a Modal function.
+
+### Three things that are real, not staged
+
+**The agent genuinely selects analyses.** Not a fixed pipeline — the tool
+sequence differs by question:
+
+| Question | Tools it runs |
+|---|---|
+| "What happens if the Water Treatment Plant loses power?" | `resolve_assets` → `run_cascade` → `graph_metrics` → `rank_mitigations` |
+| "What is our biggest single point of failure?" | `resolve_assets` → `graph_metrics` — **no cascade** |
+| "Which packages are a supply chain risk?" | `resolve_assets` → `osprey_scan` |
+| "Simulate an attack on the Atlantis Sea Gate" | `resolve_assets` → stops, names the valid assets |
+
+**Every advertised gain is a measured delta.** For each candidate mitigation the
+engine deep-copies the graph, applies the change, and re-runs the cascade.
+Confidence is a real sensitivity analysis: the gain is re-measured under jittered
+failure thresholds, and confidence is the share of those runs where it holds.
+The LLM may reword a title; it never touches a number.
+
+Mitigations are not independent, so **approving one re-scores the rest**. Once the
+control plane is segmented, "add redundancy at Substation A" is worth nothing — it
+drops to `superseded` instead of advertising a stale +10.
+
+**One code path mutates the graph.** `POST /api/recommendations/{id}/apply`, reached
+only by a human clicking Approve. `test_no_autonomous_apply_path` asserts no other
+route can.
+
+---
+
+## Degradation
+
+Nothing in the demo path needs the network. Each integration fails soft:
+
+| If this is unavailable | What happens |
+|---|---|
+| `ANTHROPIC_API_KEY` unset, or the API errors mid-run | Deterministic router plans the investigation and emits an identical event stream. The UI cannot tell. |
+| Modal | `USE_MODAL=false` runs the same engine module in-process. |
+| OSSPrey API | `OSPREY_MODE=mock` returns findings in the live API's shape. |
+| SSE connection drops | The hook falls back to polling `/events`. |
+
+`GET /api/health` reports which path is live. `overmind: fallback` and
+`osprey: mock` are expected, not failures.
+
+---
+
+## Tests
+
+```bash
+cd backend  && python -m pytest -q      # 23 passed
+cd frontend && npx playwright test      # 4 passed
+```
+
+The Playwright suite **is** the demo rehearsal — it drives the exact click path
+above at 1280×720 and asserts the score lands on 43, then on 43 + the claimed
+gain. Run it before walking to the stage.
+
+Notable cases: `test_cascade_determinism`, `test_cascade_control_centre` (golden),
+`test_recommendation_gain_is_real`, `test_no_autonomous_apply_path`,
+`test_supply_chain_ranked_by_operational_impact`, `test_unknown_asset_query`.
+
+---
+
+## Scoring
+
+```
+score = 100 × (1 − Σ(criticality × impact) / Σ(criticality))     failed = 1.0, degraded = 0.5
+```
+
+Population impact is derived from the **share of critical-service capacity lost**,
+not by summing each asset's `population_served` — those overlap heavily (the same
+resident depends on power, water and telecoms), so summing them would report more
+casualties than the city has people.
+
+Propagation sums failed-supplier weights **per dependency type**: losing 0.5 of
+power and 0.5 of comms is not the same as losing 1.0 of power, and conflating them
+overstates cascades.
+
+---
+
+## Known gaps
+
+- Seed data only. No real SCADA/OT telemetry — that is the roadmap, not a claim.
+- No auth or multi-tenancy; single demo workspace.
+- Deterministic cascade only. The engine interface leaves room for Monte Carlo.
+- Desktop only, 1280×720 target.
+- Modal and Overmind are wired as flags but not deployed — the fallbacks are what run.
