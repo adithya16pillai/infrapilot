@@ -229,3 +229,26 @@ test("pending approvals are reviewable from their own page", async ({ page }) =>
     timeout: 15_000,
   });
 });
+
+test("dashboard sections navigate as a whole, rows still win", async ({ page }) => {
+  await page.goto("/city");
+  await page.getByTestId("preset-ransomware_control_centre").click();
+  await expect(page.getByTestId("resilience-score")).toHaveText("43", {
+    timeout: 25_000,
+  });
+
+  await page.goto("/");
+  // The separate "view all"/"Inspect" affordances are gone.
+  for (const gone of ["Inspect", "All assets", "All findings", "Review all", "Full history"]) {
+    await expect(page.getByText(gone, { exact: true })).toHaveCount(0);
+  }
+
+  // Clicking a section navigates.
+  await page.getByText("Operational status").click();
+  await expect(page).toHaveURL(/\/assets$/);
+
+  // A row inside a clickable section beats the section behind it.
+  await page.goto("/");
+  await page.getByText(/^impact /).first().click();
+  await expect(page).toHaveURL(/\/city\?asset=/);
+});

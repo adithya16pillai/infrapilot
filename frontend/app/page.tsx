@@ -1,9 +1,15 @@
 "use client";
 
 import { ChevronRight, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AppShell, Card, CityViewButton, PageHeader } from "@/components/AppShell";
+import {
+  AppShell,
+  Card,
+  CardRow,
+  CityViewButton,
+  PageHeader,
+} from "@/components/AppShell";
 import { ScoreCounter } from "@/components/ScoreCounter";
 import { api } from "@/lib/api";
 import type { DashboardSummary } from "@/lib/types";
@@ -16,6 +22,7 @@ const STATUS_COLOUR: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,8 +79,11 @@ export default function DashboardPage() {
         )}
 
         {data && (
-          <div className="grid grid-cols-3 gap-4 p-6">
-            <Card title="Highest risk asset" href={`/city?asset=${data.highest_risk_asset.id}`} hint="Inspect">
+          <div className="grid grid-cols-4 gap-4 p-6">
+            <Card
+              title="Highest risk asset"
+              href={`/city?asset=${data.highest_risk_asset.id}`}
+            >
               <p className="text-[19px] font-medium text-neutral-100">
                 {data.highest_risk_asset.name}
               </p>
@@ -83,7 +93,7 @@ export default function DashboardPage() {
               </p>
             </Card>
 
-            <Card title="Critical assets" href="/assets" hint="All assets">
+            <Card title="Critical assets" href="/assets">
               <p className="font-mono text-4xl font-bold text-neutral-100">
                 {data.critical_assets}
               </p>
@@ -92,7 +102,7 @@ export default function DashboardPage() {
               </p>
             </Card>
 
-            <Card title="Residents at risk">
+            <Card title="Residents at risk" href="/simulations">
               <p className="font-mono text-4xl font-bold text-[var(--ip-orange)]">
                 {(data.estimated_population_impact / 1000).toFixed(0)}k
               </p>
@@ -101,7 +111,7 @@ export default function DashboardPage() {
               </p>
             </Card>
 
-            <Card title="Operational status">
+            <Card title="Operational status" href="/assets">
               <div className="space-y-2">
                 {Object.entries(data.status_breakdown).map(([status, count]) => (
                   <div key={status} className="flex items-center gap-2">
@@ -118,21 +128,15 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card
-              title="Top supply chain risks"
-              href="/risks"
-              hint="All findings"
-              className="col-span-2"
-            >
+            <Card title="Top supply chain risks" href="/risks" className="col-span-2">
               {data.top_supply_chain_risks.length === 0 ? (
                 <p className="font-mono text-[11px] text-neutral-600">No findings.</p>
               ) : (
                 <div className="space-y-1">
                   {data.top_supply_chain_risks.map((finding) => (
-                    <Link
+                    <CardRow
                       key={finding.id}
                       href={`/city?asset=${finding.asset_id}`}
-                      className="-mx-2 block rounded px-2 py-1.5 transition hover:bg-white/5"
                     >
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="font-mono text-[11.5px] text-neutral-200">
@@ -145,13 +149,13 @@ export default function DashboardPage() {
                       <p className="mt-0.5 truncate font-mono text-[10px] text-neutral-500">
                         {finding.chain_names?.join(" → ") || finding.asset_name}
                       </p>
-                    </Link>
+                    </CardRow>
                   ))}
                 </div>
               )}
             </Card>
 
-            <Card title="Pending approvals" href="/approvals" hint="Review all">
+            <Card title="Pending approvals" href="/approvals" className="col-span-2">
               {data.pending_recommendations.length === 0 ? (
                 <p className="font-mono text-[11px] text-neutral-600">
                   Nothing awaiting review.
@@ -159,10 +163,9 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-1">
                   {data.pending_recommendations.map((rec) => (
-                    <Link
+                    <CardRow
                       key={rec.id}
                       href={`/city?simulation=${rec.simulation_id}&rec=${rec.id}`}
-                      className="-mx-2 block rounded px-2 py-1.5 transition hover:bg-white/5"
                     >
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-[11.5px] text-neutral-300">
@@ -175,18 +178,13 @@ export default function DashboardPage() {
                       <p className="mt-0.5 font-mono text-[10px] text-neutral-500">
                         {rec.cost_estimate} · {rec.gain_per_10k?.toFixed(1)} pts / £10k
                       </p>
-                    </Link>
+                    </CardRow>
                   ))}
                 </div>
               )}
             </Card>
 
-            <Card
-              title="Recent simulations"
-              href="/simulations"
-              hint="Full history"
-              className="col-span-3"
-            >
+            <Card title="Recent simulations" href="/simulations" className="col-span-4">
               {data.recent_simulations.length === 0 ? (
                 <p className="py-3 font-mono text-[11px] text-neutral-600">
                   No simulations yet — open the city view and run one.
@@ -212,8 +210,10 @@ export default function DashboardPage() {
                         <tr
                           key={sim.id}
                           className="cursor-pointer border-t border-[var(--ip-grey-800)] text-[12px] transition hover:bg-white/5"
-                          onClick={() => {
-                            window.location.href = `/city?simulation=${sim.id}`;
+                          onClick={(event) => {
+                            // Beat the card behind us to the click.
+                            event.stopPropagation();
+                            router.push(`/city?simulation=${sim.id}`);
                           }}
                           data-testid="simulation-row"
                         >

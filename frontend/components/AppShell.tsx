@@ -3,7 +3,6 @@
 import {
   Activity,
   ChevronDown,
-  ChevronRight,
   CircleUser,
   HeartPulse,
   LayoutDashboard,
@@ -16,7 +15,7 @@ import {
   Server,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const NAV = [
@@ -179,7 +178,15 @@ export function PageHeader({
   );
 }
 
-/** Section chrome. Titles are deliberately larger and bolder than the body. */
+/**
+ * Section chrome. Titles are deliberately larger and bolder than the body.
+ *
+ * A card with `href` is clickable in its entirety rather than carrying a
+ * separate "view all" affordance. It navigates via the router instead of
+ * wrapping the card in an anchor, because several of these cards contain
+ * their own clickable rows and nesting interactive elements inside a link is
+ * invalid markup that swallows the inner click.
+ */
 export function Card({
   title,
   hint,
@@ -193,32 +200,86 @@ export function Card({
   children: React.ReactNode;
   className?: string;
 }) {
-  return (
-    <section
-      className={`rounded-lg border border-[var(--ip-grey-700)] bg-[var(--ip-grey-900)] p-4 ${className}`}
-    >
+  const router = useRouter();
+
+  const body = (
+    <>
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="text-[15px] font-semibold tracking-tight text-neutral-50">
           {title}
         </h2>
-        {href ? (
-          <Link
-            href={href}
-            className="flex shrink-0 items-center gap-0.5 font-mono text-[10px] text-neutral-500 transition hover:text-[var(--ip-blue)]"
-          >
-            {hint ?? "View all"}
-            <ChevronRight className="h-3 w-3" />
-          </Link>
-        ) : (
-          hint && (
-            <span className="shrink-0 font-mono text-[10px] text-neutral-600">
-              {hint}
-            </span>
-          )
+        {hint && (
+          <span className="shrink-0 font-mono text-[10px] text-neutral-600">
+            {hint}
+          </span>
         )}
       </div>
       {children}
+    </>
+  );
+
+  if (!href) {
+    return (
+      <section
+        className={`rounded-lg border border-[var(--ip-grey-700)] bg-[var(--ip-grey-900)] p-4 ${className}`}
+      >
+        {body}
+      </section>
+    );
+  }
+
+  return (
+    <section
+      role="link"
+      tabIndex={0}
+      data-testid="dashboard-card"
+      onClick={() => router.push(href)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          router.push(href);
+        }
+      }}
+      className={`cursor-pointer rounded-lg border border-[var(--ip-grey-700)] bg-[var(--ip-grey-900)] p-4 transition hover:border-[var(--ip-blue)] focus:border-[var(--ip-blue)] focus:outline-none ${className}`}
+    >
+      {body}
     </section>
+  );
+}
+
+/**
+ * A row inside a clickable Card that navigates somewhere of its own.
+ * Stops propagation so the row wins over the card behind it.
+ */
+export function CardRow({
+  href,
+  children,
+  testId,
+}: {
+  href: string;
+  children: React.ReactNode;
+  testId?: string;
+}) {
+  const router = useRouter();
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      data-testid={testId}
+      onClick={(event) => {
+        event.stopPropagation();
+        router.push(href);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.stopPropagation();
+          router.push(href);
+        }
+      }}
+      className="-mx-2 cursor-pointer rounded px-2 py-1.5 transition hover:bg-white/5"
+    >
+      {children}
+    </div>
   );
 }
 
