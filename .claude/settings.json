@@ -52,7 +52,14 @@
       "Bash(timeout 300 npx playwright test)",
       "Bash(npx eslint *)",
       "Bash(curl -s http://127.0.0.1:8000/api/graph)",
-      "Bash(sed -i 's/from app.recommendations.rules import JITTER_STEPS, _confidence/from app.recommendations.rules import JITTER_PROFILES, _confidence/; s/assert 0.0 not in JITTER_STEPS/assert all\\(delta != 0.0 for _mode, delta in JITTER_PROFILES\\)/' tests/test_api.py)"
+      "Bash(sed -i 's/from app.recommendations.rules import JITTER_STEPS, _confidence/from app.recommendations.rules import JITTER_PROFILES, _confidence/; s/assert 0.0 not in JITTER_STEPS/assert all\\(delta != 0.0 for _mode, delta in JITTER_PROFILES\\)/' tests/test_api.py)",
+      "Bash(grep -iE \"\\\\.env|\\\\.db$|\\\\.sqlite|secret|credential|\\\\.pem$|\\\\.key$|id_rsa|\\\\.p12|token\")",
+      "Bash(git grep *)",
+      "Bash(python -W error::SyntaxWarning -c \"import app.routes.simulate; print\\('no syntax warning'\\)\")",
+      "Bash(grep -iE \"\\\\.env$|\\\\.db$|\\\\.pem$|\\\\.key$|secret|credential\")",
+      "Bash(sed -n '/Env . secrets/,/^$/p' .gitignore)",
+      "Read(//c/Users/adith/Desktop/**)",
+      "Bash(timeout 280 npx playwright test)"
     ]
   }
 }

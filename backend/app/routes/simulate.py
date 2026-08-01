@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import secrets
 from datetime import datetime, timezone
 
@@ -28,6 +29,24 @@ def _new_id() -> str:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+#: Token shapes worth scrubbing before an error string is persisted or streamed.
+_SECRET_PATTERN = re.compile(
+    r"(sk-ant-[A-Za-z0-9_\-]{6,}|sk-[A-Za-z0-9]{12,}|ghp_[A-Za-z0-9]{12,}|"
+    r"Bearer\s+[A-Za-z0-9._\-]{12,})"
+)
+
+
+def _redact(message: str) -> str:
+    """Strip credential-shaped tokens out of an error before it is stored.
+
+    Exception text from an upstream client can carry a header or URL that
+    embeds a key. This error lands in `simulations.error` and on the SSE
+    stream, so it is the one place a secret could escape into something a
+    browser renders and a database keeps.
+    """
+    return _SECRET_PATTERN.sub("[redacted]", message)[:500]
 
 
 @router.post("/simulate", response_model=SimulateAccepted, status_code=202)
@@ -64,13 +83,14 @@ def _run_investigation(simulation_id: str, query: str) -> None:
         if outcome.get("unresolved"):
             status = "unresolved"
     except Exception as exc:  # noqa: BLE001
-        status, error, summary = "failed", str(exc), ""
+        status, summary = "failed", ""
+        error = _redact(f"{type(exc).__name__}: {exc}")
         events.emit(
             simulation_id,
             type="error",
             label="Investigation failed",
             status="failed",
-            detail=str(exc),
+            detail=error,
         )
 
     with connect() as conn:

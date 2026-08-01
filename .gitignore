@@ -6,10 +6,18 @@ venv/
 *.egg-info/
 .pytest_cache/
 
-# Env / secrets
+# Env / secrets. .env.example is the only env file that may be committed.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+credentials.json
+secrets.json
+.netrc
 
 # Database
 *.db
