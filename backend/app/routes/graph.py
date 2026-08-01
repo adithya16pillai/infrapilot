@@ -52,7 +52,48 @@ def get_supply_chain() -> dict:
     """All findings, ranked by operational impact rather than raw severity (F6)."""
     graph = load_graph()
     findings = osprey.scan_all(graph)
-    return {"mode": osprey.mode(), "findings": findings}
+    return {
+        "mode": osprey.mode(),
+        "findings": findings,
+        "comparison": osprey.impact_comparison(graph),
+    }
+
+
+@router.get("/simulations")
+def list_simulations(limit: int = 50) -> list[dict]:
+    """History for the Simulations page."""
+    import json
+
+    with connect() as conn:
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT s.id, s.query, s.scenario_preset, s.status, s.summary, "
+                "s.created_at, r.payload FROM simulations s "
+                "LEFT JOIN simulation_results r ON r.simulation_id = s.id "
+                "ORDER BY s.created_at DESC LIMIT ?",
+                (limit,),
+            )
+        ]
+
+    out = []
+    for row in rows:
+        payload = json.loads(row["payload"]) if row["payload"] else None
+        out.append(
+            {
+                "id": row["id"],
+                "query": row["query"],
+                "scenario_preset": row["scenario_preset"],
+                "status": row["status"],
+                "summary": row["summary"],
+                "created_at": row["created_at"],
+                "score_before": payload["resilience_score_before"] if payload else None,
+                "score_after": payload["resilience_score_after"] if payload else None,
+                "blast_radius": payload["blast_radius"] if payload else None,
+                "seed_assets": payload["seed_assets"] if payload else [],
+            }
+        )
+    return out
 
 
 @router.post("/reset")
@@ -89,9 +130,10 @@ def get_dashboard() -> dict:
             dict(row)
             for row in conn.execute(
                 "SELECT id, simulation_id, title, expected_resilience_gain, "
-                "cost_estimate, difficulty, confidence, rationale, status "
-                "FROM recommendations WHERE status = 'pending' "
-                "ORDER BY expected_resilience_gain DESC LIMIT 5"
+                "cost_estimate, cost_gbp, gain_per_10k, difficulty, confidence, "
+                "rationale, status, graph_mutation FROM recommendations "
+                "WHERE status = 'pending' "
+                "ORDER BY gain_per_10k DESC, expected_resilience_gain DESC LIMIT 5"
             )
         ]
 

@@ -57,6 +57,9 @@ def scan_asset(graph: dict, asset_id: str) -> list[dict[str, Any]]:
     chain = _impact_chain(graph, asset_id)
     findings = []
 
+    names = {aid: asset["name"] for aid, asset in graph["assets"].items()}
+    reaches = [names.get(node, node) for node in chain[1:]] or ["no downstream assets"]
+
     for row in rows:
         weight = SEVERITY_WEIGHT.get(row["severity"], 0.3)
         impact = round(weight * reach, 2)
@@ -64,13 +67,20 @@ def scan_asset(graph: dict, asset_id: str) -> list[dict[str, Any]]:
             {
                 "id": row["id"],
                 "asset_id": row["asset_id"],
-                "asset_name": graph["assets"].get(asset_id, {}).get("name", asset_id),
+                "asset_name": names.get(asset_id, asset_id),
                 "package": row["package"],
                 "severity": row["severity"],
                 "behaviour": row["behaviour"],
                 "operational_impact": impact,
                 "downstream_criticality": reach,
+                "severity_weight": weight,
+                # Spelled out so the ranking is auditable rather than a black box.
+                "rank_reason": (
+                    f"{row['severity']} severity (x{weight}) on an asset whose failure "
+                    f"reaches {', '.join(reaches)} — downstream criticality {reach}."
+                ),
                 "chain": chain,
+                "chain_names": [names.get(node, node) for node in chain],
             }
         )
 
@@ -96,6 +106,43 @@ def scan_all(graph: dict) -> list[dict[str, Any]]:
         key=lambda f: (-f["operational_impact"], f["asset_id"], f["package"])
     )
     return findings
+
+
+def impact_comparison(graph: dict) -> dict[str, Any] | None:
+    """Two equally-severe findings that InfraPilot ranks differently.
+
+    This is the argument for the whole layer: CVSS-style severity says these
+    are the same problem, operational impact says they are not, because one
+    asset's failure reaches acute healthcare and the other's does not.
+    """
+    findings = scan_all(graph)
+    by_severity: dict[str, list[dict]] = {}
+    for finding in findings:
+        by_severity.setdefault(finding["severity"], []).append(finding)
+
+    for severity in ("high", "medium", "low"):
+        peers = by_severity.get(severity, [])
+        if len(peers) < 2:
+            continue
+        higher, lower = peers[0], peers[-1]
+        if higher["operational_impact"] <= lower["operational_impact"]:
+            continue
+        ratio = round(higher["operational_impact"] / max(lower["operational_impact"], 0.01), 1)
+        return {
+            "severity": severity,
+            "higher": higher,
+            "lower": lower,
+            "ratio": ratio,
+            "explanation": (
+                f"OSSPrey flags both as {severity} severity — by behaviour, they are "
+                f"the same class of threat. InfraPilot ranks {higher['package']} on "
+                f"{higher['asset_name']} {ratio}x higher because that asset's failure "
+                f"cascades to {', '.join(higher['chain_names'][1:]) or 'other assets'}, "
+                f"while {lower['asset_name']} does not. Patch order should follow "
+                f"operational impact, not severity alone."
+            ),
+        }
+    return None
 
 
 def _persist(findings: list[dict[str, Any]]) -> None:

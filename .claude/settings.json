@@ -33,7 +33,22 @@
       "Bash(node probe7.mjs)",
       "Bash(rm -f probe*.mjs)",
       "Bash(node shot.mjs)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(grep -iE \"\\\\.env$|\\\\.db$|\\\\.sqlite|node_modules|\\\\.next/\")",
+      "Bash(git -c core.safecrlf=false commit -q -F -)",
+      "Bash(python -m pytest -q)",
+      "Bash(curl -s http://127.0.0.1:8000/api/health)",
+      "Bash(python -c \"import sys,json; print\\('planner:', json.load\\(sys.stdin\\)['planner']\\)\")",
+      "Bash(env)",
+      "Bash(rm -f infrapilot.db)",
+      "Bash(python -m pytest tests/test_planner_llm.py -q)",
+      "Bash(sed -i 's|python -m seed.verify_planner|python verify_planner.py|' tests/test_planner_llm.py)",
+      "Bash(python verify_planner.py)",
+      "Bash(python -)",
+      "Bash(rm -rf app/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"dev:3000 %{http_code}\\\\n\" http://127.0.0.1:3000/city)",
+      "Bash(timeout 400 npx playwright test)",
+      "Bash(curl -s http://127.0.0.1:8000/api/dashboard)"
     ]
   }
 }

@@ -52,6 +52,16 @@ export interface SimulationEvent {
   ts: string;
 }
 
+export interface KillChainHop {
+  step: number;
+  source: string;
+  target: string;
+  dependency_type: DependencyType | "unknown";
+  weight: number;
+  resulting_status: AssetStatus;
+  via: string;
+}
+
 export interface CascadeResult {
   simulation_id?: string;
   seed_assets: string[];
@@ -62,6 +72,7 @@ export interface CascadeResult {
   resilience_score_after: number;
   blast_radius: number;
   critical_path: string[];
+  kill_chain: KillChainHop[];
   single_points_of_failure: string[];
   importance_ranking: { asset_id: string; betweenness: number }[];
   estimated_population_impact: number;
@@ -76,6 +87,9 @@ export interface Recommendation {
   title: string;
   expected_resilience_gain: number;
   cost_estimate: string;
+  cost_gbp: number;
+  /** Resilience points bought per GBP 10k — the ranking key. */
+  gain_per_10k: number;
   difficulty: string;
   confidence: number;
   rationale: string;
@@ -104,7 +118,37 @@ export interface SupplyChainFinding {
   behaviour: string;
   operational_impact: number;
   downstream_criticality: number;
+  severity_weight: number;
+  rank_reason: string;
   chain: string[];
+  chain_names: string[];
+}
+
+export interface ImpactComparison {
+  severity: string;
+  higher: SupplyChainFinding;
+  lower: SupplyChainFinding;
+  ratio: number;
+  explanation: string;
+}
+
+export interface SupplyChainResponse {
+  mode: "mock" | "live";
+  findings: SupplyChainFinding[];
+  comparison: ImpactComparison | null;
+}
+
+export interface SimulationSummary {
+  id: string;
+  query: string;
+  scenario_preset: string | null;
+  status: string;
+  summary: string | null;
+  created_at: string;
+  score_before: number | null;
+  score_after: number | null;
+  blast_radius: number | null;
+  seed_assets: string[];
 }
 
 export interface AssetDetail extends Asset {

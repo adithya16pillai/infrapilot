@@ -26,10 +26,39 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:3000**.
+Open **http://localhost:3000** — the dashboard. **City view** (top right, or in
+the sidebar) is the graph.
 
-To enable the Claude planner, `cp backend/.env.example backend/.env` and set
-`ANTHROPIC_API_KEY`. Everything works without it — see *Degradation* below.
+To enable the Claude planner, `cp backend/.env.example backend/.env`, set
+`ANTHROPIC_API_KEY`, restart the API, then:
+
+```bash
+cd backend && python verify_planner.py
+```
+
+That drives four real queries through the agent and fails loudly if it stops
+selecting analyses per question. Everything works without a key — see
+*Degradation* below.
+
+## Navigation
+
+| Route | What it is |
+|---|---|
+| `/` | Dashboard — posture, status mix, top risks, pending approvals, recent runs. Every tile deep-links. |
+| `/city` | The graph. Launch scenarios, watch the agent, approve mitigations. |
+| `/assets` | All 12 assets: criticality, dependants, findings, status. |
+| `/approvals` | Every mitigation awaiting a decision, best value for money first. |
+| `/risks` | Supply chain findings, the OSSPrey explainer, and the impact comparison. |
+| `/simulations` | Full history. Click any run to replay it on the graph. |
+| `/health` | Which execution path is live for each integration. |
+
+Deep links carry state: `/city?simulation=<id>` replays a past run in the exact
+graph state it produced, `/city?asset=<id>` opens that asset's detail sheet, and
+`/city?simulation=<id>&rec=<id>` highlights a specific mitigation.
+
+> Profile and Sign out are presentational. This build ships no authentication
+> (a stated non-goal) — Sign out is deliberately disabled rather than faking a
+> session, and the profile popover says so.
 
 ---
 
@@ -87,6 +116,18 @@ Confidence is a real sensitivity analysis: the gain is re-measured under jittere
 failure thresholds, and confidence is the share of those runs where it holds.
 The LLM may reword a title; it never touches a number.
 
+Mitigations rank by **resilience points per £10k**, not raw gain. Ranking on gain
+alone structurally favours the most expensive fix, which is the opposite of the
+budget question an operator is actually asking:
+
+```
+Segment Control Centre / Substation A control plane  +14  £12k  11.7 pts/£10k
+Provision independent dispatch comms                  +5  £12k   4.2
+Segment Substation A to Hospital                      +5  £12k   4.2
+Segment Control Centre to Water Treatment             +4  £12k   3.3
+Deploy redundant protection relays at Substation A   +10  £45k   2.2   <- biggest gain, worst value
+```
+
 Mitigations are not independent, so **approving one re-scores the rest**. Once the
 control plane is segmented, "add redundancy at Substation A" is worth nothing — it
 drops to `superseded` instead of advertising a stale +10.
@@ -94,6 +135,31 @@ drops to `superseded` instead of advertising a stale +10.
 **One code path mutates the graph.** `POST /api/recommendations/{id}/apply`, reached
 only by a human clicking Approve. `test_no_autonomous_apply_path` asserts no other
 route can.
+
+**The attack path names its mechanism.** The critical path is returned as numbered
+hops rather than a list of node names, because a security audience reads an attack
+as a sequence of mechanisms:
+
+```
+0. Control Centre      compromised
+1. Substation A        failed    via control link from Control Centre · weight 0.75
+2. Traffic Management  failed    via power feed  from Substation A   · weight 0.85
+```
+
+**Supply chain findings are ranked by consequence, not severity.** OSSPrey detects
+malicious packages by *behaviour* — install-time filesystem writes, obfuscated
+payloads, maintainer-handover takeovers — which catches compromised releases
+carrying no CVE at all. That tells you how malicious a package is; it cannot tell
+you how much it matters to this city. InfraPilot supplies the second half:
+
+```
+impact = severity_weight × downstream_criticality(asset)
+
+node-ipc@10.1.1      on Control Centre   HIGH   impact 36.0   ← cascade reaches the Hospital
+event-stream@3.3.6   on Data Centre      HIGH   impact 10.5   ← cascade stops at the Control Centre
+```
+
+Same severity, 3.4× different priority. `/risks` shows that side by side.
 
 ---
 
@@ -116,8 +182,8 @@ Nothing in the demo path needs the network. Each integration fails soft:
 ## Tests
 
 ```bash
-cd backend  && python -m pytest -q      # 23 passed
-cd frontend && npx playwright test      # 4 passed
+cd backend  && python -m pytest -q      # 29 passed
+cd frontend && npx playwright test      # 9 passed
 ```
 
 The Playwright suite **is** the demo rehearsal — it drives the exact click path
@@ -127,6 +193,11 @@ gain. Run it before walking to the stage.
 Notable cases: `test_cascade_determinism`, `test_cascade_control_centre` (golden),
 `test_recommendation_gain_is_real`, `test_no_autonomous_apply_path`,
 `test_supply_chain_ranked_by_operational_impact`, `test_unknown_asset_query`.
+
+`tests/test_planner_llm.py` drives the Claude tool-use loop with a scripted fake
+client, so the parts that are ours — tool dispatch, the assistant/tool_result
+message shape the API requires, event emission, error handling, refusal fallback
+— are proven without a key. `verify_planner.py` is the live counterpart.
 
 ---
 

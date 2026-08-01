@@ -23,11 +23,15 @@ HARDENED_THRESHOLD = 0.9  # N+1 redundancy raises the bar before an asset drops
 
 JITTER_STEPS = [-0.06, -0.03, 0.0, 0.03, 0.06]
 
+# (label, difficulty, capital cost in GBP). The numeric cost drives the
+# resilience-per-pound ranking; ranking on raw gain alone structurally favours
+# the most expensive fix, which is the opposite of the budget question an
+# operator is actually asking.
 COST_BY_OP = {
-    "set_weight": ("GBP 12k", "medium"),
-    "set_threshold": ("GBP 45k", "high"),
-    "add_edge": ("GBP 30k", "medium"),
-    "remove_edge": ("GBP 8k", "low"),
+    "set_weight": ("GBP 12k", "medium", 12_000),
+    "set_threshold": ("GBP 45k", "high", 45_000),
+    "add_edge": ("GBP 30k", "medium", 30_000),
+    "remove_edge": ("GBP 8k", "low", 8_000),
 }
 
 # Curated wording for the paths we expect on stage. Anything not listed falls
@@ -174,7 +178,7 @@ def build_recommendations(
             continue  # never show a mitigation that does not actually help
 
         op = candidate["key"][0]
-        cost, difficulty = COST_BY_OP.get(op, ("GBP 20k", "medium"))
+        cost, difficulty, cost_gbp = COST_BY_OP.get(op, ("GBP 20k", "medium", 20_000))
         title, rationale = _describe(candidate["key"], graph, gain)
 
         scored.append(
@@ -182,6 +186,9 @@ def build_recommendations(
                 "title": title,
                 "expected_resilience_gain": gain,
                 "cost_estimate": cost,
+                "cost_gbp": cost_gbp,
+                # Resilience points bought per GBP 10k of capital spend.
+                "gain_per_10k": round(gain / (cost_gbp / 10_000), 1),
                 "difficulty": difficulty,
                 "confidence": _confidence(graph, seeds, mutation, gain),
                 "rationale": rationale,
@@ -190,7 +197,10 @@ def build_recommendations(
             }
         )
 
-    scored.sort(key=lambda r: (-r["expected_resilience_gain"], -r["confidence"], r["title"]))
+    # Rank by value for money, then by absolute gain as the tie-break.
+    scored.sort(
+        key=lambda r: (-r["gain_per_10k"], -r["expected_resilience_gain"], r["title"])
+    )
     top = scored[:limit]
     for index, rec in enumerate(top):
         rec["rank"] = index

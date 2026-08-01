@@ -94,8 +94,9 @@ def run_cascade(graph: dict[str, Any], seed_assets: Iterable[str]) -> dict[str, 
     score_before = resilience_score(assets, baseline)
 
     statuses = dict(baseline)
-    # `cause[node]` = the supplier that pushed it over the line, for critical path.
-    cause: dict[str, tuple[str, float]] = {}
+    # `cause[node]` = (supplier, weight, dependency_type) — the link that pushed
+    # this asset over the line. Drives both the critical path and the kill chain.
+    cause: dict[str, tuple[str, float, str]] = {}
 
     seeds = sorted({s for s in seed_assets if s in assets})
     queue: deque[str] = deque()
@@ -129,6 +130,7 @@ def run_cascade(graph: dict[str, Any], seed_assets: Iterable[str]) -> dict[str, 
                 # Degraded nodes do not propagate in the deterministic v1 model.
 
     score_after = resilience_score(assets, statuses)
+    critical_path = _critical_path(seeds, cause, statuses)
 
     failed = sorted(a for a in assets if statuses[a] == "failed")
     degraded = sorted(a for a in assets if statuses[a] == "degraded")
@@ -142,7 +144,8 @@ def run_cascade(graph: dict[str, Any], seed_assets: Iterable[str]) -> dict[str, 
         "resilience_score_before": score_before,
         "resilience_score_after": score_after,
         "blast_radius": len(newly_impacted),
-        "critical_path": _critical_path(seeds, cause, statuses),
+        "critical_path": critical_path,
+        "kill_chain": _kill_chain(critical_path, cause, statuses),
         "estimated_population_impact": _population_impact(score_before, score_after),
         "affected_services": _affected_services(newly_impacted, statuses),
         "statuses": statuses,
@@ -154,20 +157,49 @@ def _strongest_failed_supplier(
     asset_id: str,
     suppliers_of: dict[str, list[tuple[str, str, float]]],
     statuses: dict[str, str],
-) -> tuple[str, float]:
+) -> tuple[str, float, str]:
     """The single failed supplier contributing the most weight (ties -> name order)."""
     candidates = [
-        (source, weight)
-        for source, _dep_type, weight in suppliers_of[asset_id]
+        (source, weight, dep_type)
+        for source, dep_type, weight in suppliers_of[asset_id]
         if statuses.get(source) == "failed"
     ]
     if not candidates:
-        return ("", 0.0)
-    return max(sorted(candidates), key=lambda pair: pair[1])
+        return ("", 0.0, "")
+    return max(sorted(candidates), key=lambda entry: entry[1])
+
+
+def _kill_chain(
+    path: list[str],
+    cause: dict[str, tuple[str, float, str]],
+    statuses: dict[str, str],
+) -> list[dict[str, Any]]:
+    """The critical path expressed as numbered attacker hops.
+
+    A security audience reads an attack as a sequence of mechanisms, not a list
+    of node names — each hop names the dependency that carried the failure and
+    the weight that breached the threshold.
+    """
+    chain: list[dict[str, Any]] = []
+    for index in range(1, len(path)):
+        target = path[index]
+        source, weight, dep_type = cause.get(target, ("", 0.0, ""))
+        chain.append(
+            {
+                "step": index,
+                "source": path[index - 1],
+                "target": target,
+                "dependency_type": dep_type or "unknown",
+                "weight": weight,
+                "resulting_status": statuses.get(target, "healthy"),
+                "via": source,
+            }
+        )
+    return chain
 
 
 def _critical_path(
-    seeds: list[str], cause: dict[str, tuple[str, float]], statuses: dict[str, str]
+    seeds: list[str], cause: dict[str, tuple[str, float, str]], statuses: dict[str, str]
 ) -> list[str]:
     """Heaviest root-to-leaf chain through the propagation tree.
 
@@ -183,7 +215,7 @@ def _critical_path(
         cursor = node
         guard = 0
         while cursor in cause and guard < len(statuses) + 1:
-            parent, weight = cause[cursor]
+            parent, weight, _dep_type = cause[cursor]
             if not parent or parent in path:
                 break
             weight_total += weight

@@ -217,8 +217,9 @@ def persist_recommendations(simulation_id: str, recommendations: list[dict]) -> 
                 """
                 INSERT INTO recommendations
                     (id, simulation_id, title, expected_resilience_gain, cost_estimate,
-                     difficulty, confidence, rationale, status, graph_mutation, rank)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                     cost_gbp, gain_per_10k, difficulty, confidence, rationale,
+                     status, graph_mutation, rank)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                 """,
                 (
                     rec_id,
@@ -226,6 +227,8 @@ def persist_recommendations(simulation_id: str, recommendations: list[dict]) -> 
                     rec["title"],
                     rec["expected_resilience_gain"],
                     rec["cost_estimate"],
+                    rec["cost_gbp"],
+                    rec["gain_per_10k"],
                     rec["difficulty"],
                     rec["confidence"],
                     rec["rationale"],

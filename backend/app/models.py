@@ -69,6 +69,18 @@ class ImportanceEntry(BaseModel):
     betweenness: float
 
 
+class KillChainHop(BaseModel):
+    """One attacker hop along the critical path, with the mechanism named."""
+
+    step: int
+    source: str
+    target: str
+    dependency_type: str
+    weight: float
+    resulting_status: str
+    via: str
+
+
 class CascadeResult(BaseModel):
     """The F3 output contract."""
 
@@ -81,6 +93,7 @@ class CascadeResult(BaseModel):
     resilience_score_after: int
     blast_radius: int
     critical_path: list[str]
+    kill_chain: list[KillChainHop] = Field(default_factory=list)
     single_points_of_failure: list[str] = Field(default_factory=list)
     importance_ranking: list[ImportanceEntry] = Field(default_factory=list)
     estimated_population_impact: int
@@ -95,6 +108,9 @@ class Recommendation(BaseModel):
     title: str
     expected_resilience_gain: int
     cost_estimate: str
+    cost_gbp: int = 0
+    #: Resilience points bought per GBP 10k — the ranking key.
+    gain_per_10k: float = 0.0
     difficulty: str
     confidence: float
     rationale: str

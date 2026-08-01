@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS recommendations (
     title TEXT NOT NULL,
     expected_resilience_gain INTEGER NOT NULL,
     cost_estimate TEXT,
+    cost_gbp INTEGER DEFAULT 0,
+    gain_per_10k REAL DEFAULT 0,
     difficulty TEXT,
     confidence REAL,
     rationale TEXT,

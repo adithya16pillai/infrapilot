@@ -16,11 +16,13 @@ export function RecommendationCard({
   onApprove,
   onReject,
   busy,
+  highlighted = false,
 }: {
   recommendation: Recommendation;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   busy: boolean;
+  highlighted?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const settled = recommendation.status !== "pending";
@@ -33,11 +35,13 @@ export function RecommendationCard({
       data-testid="recommendation-card"
       data-status={recommendation.status}
       className={`rounded-lg border bg-[var(--ip-grey-900)] p-3.5 ${
-        recommendation.status === "approved"
-          ? "border-[var(--ip-green)]/60"
-          : recommendation.status === "rejected"
-            ? "border-[var(--ip-grey-700)]"
-            : "border-[var(--ip-grey-700)] hover:border-[var(--ip-blue)]/50"
+        highlighted
+          ? "border-[var(--ip-blue)] ring-1 ring-[var(--ip-blue)]/40"
+          : recommendation.status === "approved"
+            ? "border-[var(--ip-green)]/60"
+            : recommendation.status === "rejected"
+              ? "border-[var(--ip-grey-700)]"
+              : "border-[var(--ip-grey-700)] hover:border-[var(--ip-blue)]/50"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -55,6 +59,12 @@ export function RecommendationCard({
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
+        <span
+          className="rounded border border-[var(--ip-blue)]/50 bg-[var(--ip-blue)]/10 px-1.5 py-0.5 text-[var(--ip-blue)]"
+          title="Resilience points bought per GBP 10k — the ranking key"
+        >
+          {recommendation.gain_per_10k.toFixed(1)} pts / £10k
+        </span>
         <span className="rounded border border-[var(--ip-grey-700)] px-1.5 py-0.5 text-neutral-400">
           {recommendation.cost_estimate}
         </span>

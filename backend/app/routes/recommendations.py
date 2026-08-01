@@ -31,6 +31,22 @@ def _load(rec_id: str) -> dict:
     return rec
 
 
+@router.get("/pending", response_model=list[Recommendation])
+def list_pending() -> list[Recommendation]:
+    """Every mitigation awaiting a human decision, best value for money first."""
+    with connect() as conn:
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM recommendations WHERE status = 'pending' "
+                "ORDER BY gain_per_10k DESC, expected_resilience_gain DESC"
+            )
+        ]
+    for row in rows:
+        row["graph_mutation"] = json.loads(row["graph_mutation"] or "{}")
+    return rows
+
+
 @router.get("", response_model=list[Recommendation])
 def list_recommendations(simulation_id: str) -> list[Recommendation]:
     with connect() as conn:
@@ -108,7 +124,7 @@ def _rescore_pending(
         pending = [
             dict(row)
             for row in conn.execute(
-                "SELECT id, graph_mutation FROM recommendations "
+                "SELECT id, graph_mutation, cost_gbp FROM recommendations "
                 "WHERE simulation_id = ? AND status = 'pending'",
                 (simulation_id,),
             )
@@ -121,10 +137,16 @@ def _rescore_pending(
                 gain = run_cascade(candidate, seeds)["resilience_score_after"] - baseline_after
             except Exception:  # noqa: BLE001 - a broken mutation must not block approval
                 gain = 0
+            cost_gbp = row["cost_gbp"] or 20_000
             conn.execute(
-                "UPDATE recommendations SET expected_resilience_gain = ?, status = ? "
-                "WHERE id = ?",
-                (max(gain, 0), "pending" if gain > 0 else "superseded", row["id"]),
+                "UPDATE recommendations SET expected_resilience_gain = ?, "
+                "gain_per_10k = ?, status = ? WHERE id = ?",
+                (
+                    max(gain, 0),
+                    round(max(gain, 0) / (cost_gbp / 10_000), 1),
+                    "pending" if gain > 0 else "superseded",
+                    row["id"],
+                ),
             )
 
 

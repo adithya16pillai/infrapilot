@@ -24,7 +24,7 @@ test.afterAll(async ({ request }) => {
 test("demo happy path: load -> simulate -> approve -> score recovers", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/city");
 
   // 1. The city loads with all twelve assets and a baseline score.
   await expect(page.getByTestId("node-control_centre")).toBeVisible({ timeout: 15_000 });
@@ -84,7 +84,7 @@ test("demo happy path: load -> simulate -> approve -> score recovers", async ({
 });
 
 test("agent picks analyses per question (F4 autonomy proof)", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/city");
   await expect(page.getByTestId("node-control_centre")).toBeVisible({ timeout: 15_000 });
 
   // A structural question must NOT run a cascade.
@@ -99,7 +99,7 @@ test("agent picks analyses per question (F4 autonomy proof)", async ({ page }) =
 });
 
 test("unknown asset returns a friendly answer, not a crash", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/city");
   await expect(page.getByTestId("node-control_centre")).toBeVisible({ timeout: 15_000 });
 
   await page.getByTestId("query-input").fill("Simulate an attack on the Atlantis Sea Gate");
@@ -112,7 +112,7 @@ test("unknown asset returns a friendly answer, not a crash", async ({ page }) =>
 });
 
 test("node detail sheet shows inventory and supply chain findings", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/city");
   await page.getByTestId("node-control_centre").click();
 
   await expect(page.getByRole("heading", { name: "Control Centre" })).toBeVisible();
@@ -123,4 +123,109 @@ test("node detail sheet shows inventory and supply chain findings", async ({ pag
   await expect(page.getByText("node-ipc@10.1.1")).toHaveCount(2);
   await expect(page.getByText(/protestware payload/i)).toBeVisible();
   await expect(page.getByText(/operational impact/i)).toBeVisible();
+});
+
+test("kill chain names the mechanism at each hop", async ({ page }) => {
+  await page.goto("/city");
+  await page.getByTestId("preset-ransomware_control_centre").click();
+
+  await expect(page.getByRole("heading", { name: "Attack path" })).toBeVisible({
+    timeout: 25_000,
+  });
+  const path = page.getByRole("heading", { name: "Attack path" }).locator("..");
+  await expect(path.getByText("compromised")).toBeVisible();
+  await expect(path.getByText(/control link/)).toBeVisible();
+  await expect(path.getByText(/power feed/)).toBeVisible();
+  await expect(path.getByText(/weight/).first()).toBeVisible();
+});
+
+test("dashboard is the landing page and links into the city", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", { name: "Resilience posture" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("resilience-score")).toHaveText("84", {
+    timeout: 15_000,
+  });
+
+  // Sidebar sections are all present.
+  const nav = page.locator("nav").first();
+  for (const label of ["Assets", "Approvals", "Risks", "Simulations", "More"]) {
+    await expect(nav.getByText(label, { exact: true })).toBeVisible();
+  }
+  await expect(nav.getByText("Profile")).toBeVisible();
+  await expect(nav.getByText("Sign out")).toBeVisible();
+
+  // Score Trend is gone.
+  await expect(page.getByText(/score trend/i)).toHaveCount(0);
+
+  await page.getByTestId("city-view-button").click();
+  await expect(page).toHaveURL(/\/city$/);
+  await expect(page.getByTestId("node-control_centre")).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
+test("a past simulation replays on the graph from the dashboard", async ({
+  page,
+}) => {
+  // Produce one run to click on.
+  await page.goto("/city");
+  await page.getByTestId("preset-ransomware_control_centre").click();
+  await expect(page.getByTestId("resilience-score")).toHaveText("43", {
+    timeout: 25_000,
+  });
+
+  await page.goto("/simulations");
+  const row = page.getByTestId("simulation-row").first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.click();
+
+  // The graph comes back in exactly the state that run produced.
+  await expect(page).toHaveURL(/simulation=sim_/);
+  await expect(page.getByTestId("node-control_centre")).toHaveAttribute(
+    "data-status",
+    "failed",
+    { timeout: 20_000 },
+  );
+  await expect(page.getByTestId("resilience-score")).toHaveText("43");
+  await expect(page.getByRole("heading", { name: "Attack path" })).toBeVisible();
+});
+
+test("risks page explains OSSPrey and ranks by operational impact", async ({
+  page,
+}) => {
+  await page.goto("/risks");
+
+  await expect(page.getByRole("heading", { name: /how ossprey reads this/i })).toBeVisible();
+  await expect(page.getByText(/rather than by matching known/i)).toBeVisible();
+  await expect(page.getByText(/impact = severity_weight/i)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /same severity, different consequence/i }),
+  ).toBeVisible();
+
+  // Findings are ordered by operational impact, and each row deep-links.
+  const rows = page.getByTestId("risk-row");
+  await expect(rows.first()).toBeVisible();
+  await rows.first().click();
+  await expect(page).toHaveURL(/\/city\?asset=/);
+});
+
+test("pending approvals are reviewable from their own page", async ({ page }) => {
+  await page.goto("/city");
+  await page.getByTestId("preset-ransomware_control_centre").click();
+  await expect(page.getByTestId("recommendation-card").first()).toBeVisible({
+    timeout: 25_000,
+  });
+
+  await page.goto("/approvals");
+  const card = page.getByTestId("recommendation-card").first();
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText(/pts \/ £10k/)).toBeVisible();
+
+  await card.getByTestId("approve-button").click();
+  await expect(page.getByText(/Applied\. Resilience under that scenario/i)).toBeVisible({
+    timeout: 15_000,
+  });
 });

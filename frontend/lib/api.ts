@@ -7,6 +7,8 @@ import type {
   Recommendation,
   SimulationDetail,
   SimulationEvent,
+  SimulationSummary,
+  SupplyChainResponse,
 } from "./types";
 
 export const API_BASE =
@@ -58,6 +60,9 @@ export const api = {
 
   simulation: (id: string) => request<SimulationDetail>(`/api/simulations/${id}`),
   events: (id: string) => request<SimulationEvent[]>(`/api/simulations/${id}/events`),
+  simulations: () => request<SimulationSummary[]>("/api/simulations"),
+  supplyChain: () => request<SupplyChainResponse>("/api/supply-chain"),
+  pendingApprovals: () => request<Recommendation[]>("/api/recommendations/pending"),
 
   recommendations: (simulationId: string) =>
     request<Recommendation[]>(
