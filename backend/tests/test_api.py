@@ -132,25 +132,107 @@ def test_reject_marks_status(client):
     client.post("/api/reset")
 
 
+def _graph_fingerprint(client) -> str:
+    """Everything the cascade engine reads, as a comparable blob."""
+    body = client.get("/api/graph").json()
+    return json.dumps(
+        {
+            "assets": sorted(
+                (a["id"], a["status"], a["failure_threshold"], a["criticality"])
+                for a in body["assets"]
+            ),
+            "dependencies": sorted(
+                (d["source"], d["target"], d["dependency_type"], d["weight"])
+                for d in body["dependencies"]
+            ),
+        },
+        sort_keys=True,
+    )
+
+
 def test_no_autonomous_apply_path(client):
-    """F5 AC#3: only the explicit apply route may mutate the stored graph."""
-    from app.routes import graph as graph_routes
-    from app.routes import recommendations as rec_routes
-    from app.routes import simulate as sim_routes
-    import inspect
+    """F5 AC#3: only the explicit apply route may mutate the stored graph.
 
-    def mutating_names(module) -> set[str]:
-        source = inspect.getsource(module)
-        return {
-            name
-            for name in ("persist_graph",)
-            if name in source
-        }
+    Exercises every other route for real rather than grepping source for
+    `persist_graph` — a string match would pass just as happily if a new
+    endpoint mutated the graph through some other call.
+    """
+    client.post("/api/reset")
+    before = _graph_fingerprint(client)
 
-    assert mutating_names(rec_routes) == {"persist_graph"}
-    assert mutating_names(sim_routes) == set()
-    # `/api/reset` reseeds the demo city; it never applies a recommendation.
-    assert "persist_graph" not in inspect.getsource(graph_routes)
+    detail = _run(client, "Ransomware on the Control Centre")
+    rec_id = detail["recommendations"][0]["id"]
+
+    # Every read path, an agent run, a rejection, and the supply chain scan the
+    # agent itself can trigger. None of these may move the graph.
+    client.get("/api/dashboard")
+    client.get("/api/supply-chain")
+    client.get("/api/simulations")
+    client.get("/api/assets/control_centre")
+    client.get("/api/health")
+    client.get(f"/api/simulations/{detail['id']}/events")
+    client.get("/api/recommendations/pending")
+    client.post(f"/api/recommendations/{rec_id}/reject")
+    _run(client, "Which packages are a supply chain risk?")
+    _run(client, "What is our biggest single point of failure?")
+
+    assert _graph_fingerprint(client) == before, "something other than apply moved the graph"
+
+    # And the one sanctioned path does move it.
+    other = [r for r in detail["recommendations"] if r["id"] != rec_id][0]
+    client.post(f"/api/recommendations/{other['id']}/apply")
+    assert _graph_fingerprint(client) != before
+
+    client.post("/api/reset")
+
+
+def test_decisions_are_attributable(client):
+    """The approval gate records who decided and when, not just the outcome."""
+    client.post("/api/reset")
+    detail = _run(client, "Ransomware on the Control Centre")
+
+    approved = client.post(
+        f"/api/recommendations/{detail['recommendations'][0]['id']}/apply"
+    ).json()["recommendation"]
+    assert approved["decided_by"]
+    assert approved["decided_at"]
+
+    rejected = client.post(
+        f"/api/recommendations/{detail['recommendations'][1]['id']}/reject"
+    ).json()
+    assert rejected["decided_by"]
+    assert rejected["decided_at"]
+    client.post("/api/reset")
+
+
+def test_untrusted_finding_text_is_fenced_before_it_reaches_the_planner(client):
+    """Live OSSPrey `behaviour` text is attacker-authored; it must not read as
+    instructions when it lands in the agent's context."""
+    from app.agent.tools import ToolContext, osprey_scan
+
+    ctx = ToolContext("sim_fence_check", "supply chain")
+    payload = osprey_scan(ctx)
+
+    for finding in payload["findings"]:
+        assert finding["behaviour"].startswith("<untrusted>")
+        assert finding["behaviour"].endswith("</untrusted>")
+        assert "\n" not in finding["behaviour"]
+
+    # The UI still receives the real, unfenced text.
+    assert all(not f["behaviour"].startswith("<untrusted>") for f in ctx.findings)
+
+
+def test_confidence_has_no_free_floor(client):
+    """A mitigation that only works in the unjittered world must be able to
+    score 0, not inherit a floor from scoring that world."""
+    from app.recommendations.rules import JITTER_PROFILES, _confidence
+    from seed.calibrate import build_graph
+
+    assert all(delta != 0.0 for _mode, delta in JITTER_PROFILES)
+    graph = build_graph()
+    # A mutation that changes nothing relevant cannot beat its own baseline.
+    inert = {"operations": [{"op": "set_threshold", "asset_id": "backup_generator", "value": 0.7}]}
+    assert _confidence(graph, ["control_centre"], inert, gain=0) == 0.0
 
 
 def test_asset_detail_includes_findings(client):

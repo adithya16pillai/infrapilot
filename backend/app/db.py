@@ -81,7 +81,11 @@ CREATE TABLE IF NOT EXISTS recommendations (
     rationale TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
     graph_mutation TEXT,
-    rank INTEGER DEFAULT 0
+    rank INTEGER DEFAULT 0,
+    -- The approval gate is the responsible-AI claim; without an actor and a
+    -- timestamp it is a button, not an audit trail.
+    decided_by TEXT,
+    decided_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS supply_chain_findings (
@@ -101,6 +105,10 @@ def connect() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # The planner writes events from a worker thread while SSE readers poll.
+    # Default rollback journaling makes those readers block on the writer.
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     try:
         yield conn
         conn.commit()

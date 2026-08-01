@@ -279,6 +279,13 @@ function CityView() {
               <p className="mt-1.5 text-[12px] leading-relaxed text-neutral-300">
                 {shownSummary}
               </p>
+              {/* This paragraph is model-written narrative. Every figure
+                  elsewhere on this page is computed and re-simulated; saying so
+                  keeps the two from being read as equally verified. */}
+              <p className="mt-2 border-t border-[var(--ip-grey-700)] pt-2 font-mono text-[9.5px] leading-relaxed text-neutral-500">
+                Model-written narrative, not a verified figure. The resilience
+                scores, gains and attack path above are computed by the engine.
+              </p>
             </details>
           )}
 

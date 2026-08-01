@@ -21,7 +21,22 @@ from ..engine.mutations import apply_mutation
 SEGMENTATION_FACTOR = 0.35  # residual coupling after network segmentation
 HARDENED_THRESHOLD = 0.9  # N+1 redundancy raises the bar before an asset drops
 
-JITTER_STEPS = [-0.06, -0.03, 0.0, 0.03, 0.06]
+# (mode, delta) worlds to re-measure each gain in. "uniform" shifts every
+# threshold the same way — the whole city becoming more or less fragile at once.
+# "alternating" moves neighbours in opposite directions, which is where a
+# mitigation that depends on one specific asset holding tends to break.
+#
+# 0.0 is deliberately absent: the unjittered world is the one that produced the
+# advertised gain, so scoring it hands every positive mitigation a free 1/N and
+# puts a floor under confidence it has not earned.
+JITTER_PROFILES: list[tuple[str, float]] = [
+    ("uniform", -0.10),
+    ("uniform", -0.05),
+    ("uniform", 0.05),
+    ("uniform", 0.10),
+    ("alternating", -0.08),
+    ("alternating", 0.08),
+]
 
 # (label, difficulty, capital cost in GBP). The numeric cost drives the
 # resilience-per-pound ranking; ranking on raw gain alone structurally favours
@@ -111,29 +126,39 @@ def _measure_gain(graph: dict, seeds: list[str], mutation: dict, baseline_after:
 
 
 def _confidence(graph: dict, seeds: list[str], mutation: dict, gain: int) -> float:
-    """Share of threshold-jittered worlds in which the gain broadly holds."""
+    """Share of threshold-jittered worlds in which the gain broadly holds.
+
+    Offsets alternate sign across assets rather than shifting every threshold
+    the same way. A uniform shift only ever tests "the whole city is a bit more
+    or a bit less fragile", which the cascade absorbs smoothly; alternating
+    tests the mixed cases where one asset holds while its neighbour gives, and
+    that is where a mitigation's value actually turns out to be brittle.
+    """
     if gain <= 0:
         return 0.0
+
+    assets = sorted(graph["assets"].items())
     holds = 0
-    for delta in JITTER_STEPS:
-        jittered = apply_mutation(
-            graph,
-            {
-                "operations": [
-                    {
-                        "op": "set_threshold",
-                        "asset_id": asset_id,
-                        "value": max(0.15, min(0.95, asset.get("failure_threshold", 0.7) + delta)),
-                    }
-                    for asset_id, asset in graph["assets"].items()
-                ]
-            },
-        )
+
+    for mode, delta in JITTER_PROFILES:
+        operations = []
+        for position, (asset_id, asset) in enumerate(assets):
+            signed = -delta if (mode == "alternating" and position % 2) else delta
+            operations.append(
+                {
+                    "op": "set_threshold",
+                    "asset_id": asset_id,
+                    "value": max(
+                        0.15, min(0.95, asset.get("failure_threshold", 0.7) + signed)
+                    ),
+                }
+            )
+        jittered = apply_mutation(graph, {"operations": operations})
         base = run_cascade(jittered, seeds)["resilience_score_after"]
-        jittered_gain = _measure_gain(jittered, seeds, mutation, base)
-        if jittered_gain >= gain * 0.8:
+        if _measure_gain(jittered, seeds, mutation, base) >= gain * 0.8:
             holds += 1
-    return round(holds / len(JITTER_STEPS), 2)
+
+    return round(holds / len(JITTER_PROFILES), 2)
 
 
 def _describe(key: tuple, graph: dict, gain: int) -> tuple[str, str]:

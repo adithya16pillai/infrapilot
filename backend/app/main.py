@@ -41,9 +41,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_origin_regex=CORS_ORIGIN_REGEX,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # No cookies or Authorization headers are used, so credentialed CORS buys
+    # nothing and would make the permissive localhost regex meaningful.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 health_router = APIRouter(prefix="/api", tags=["health"])

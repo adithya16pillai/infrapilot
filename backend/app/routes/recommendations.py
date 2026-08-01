@@ -20,6 +20,22 @@ from ..models import ApplyResult, Recommendation
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
+#: This build ships no authentication (a stated non-goal), so there is no real
+#: principal to attribute a decision to. Recording a placeholder keeps the audit
+#: columns populated and makes the gap explicit rather than silent: wire real
+#: auth and this becomes the authenticated user.
+DEMO_OPERATOR = "demo-operator (unauthenticated build)"
+
+
+def _decision(rec_id: str) -> dict:
+    """The decision fields as actually persisted, for echoing back to the caller."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT status, decided_by, decided_at FROM recommendations WHERE id = ?",
+            (rec_id,),
+        ).fetchone()
+    return dict(row) if row else {}
+
 
 def _load(rec_id: str) -> dict:
     with connect() as conn:
@@ -63,7 +79,7 @@ def list_recommendations(simulation_id: str) -> list[Recommendation]:
 
 
 @router.post("/{rec_id}/apply", response_model=ApplyResult)
-def apply_recommendation(rec_id: str) -> ApplyResult:
+def apply_recommendation(rec_id: str, actor: str = DEMO_OPERATOR) -> ApplyResult:
     """Human-approved mutation of the resilience model. Never a live system."""
     rec = _load(rec_id)
     if rec["status"] == "approved":
@@ -90,7 +106,9 @@ def apply_recommendation(rec_id: str) -> ApplyResult:
 
     with connect() as conn:
         conn.execute(
-            "UPDATE recommendations SET status = 'approved' WHERE id = ?", (rec_id,)
+            "UPDATE recommendations SET status = 'approved', decided_by = ?, "
+            "decided_at = datetime('now') WHERE id = ?",
+            (actor, rec_id),
         )
         conn.execute(
             "INSERT OR REPLACE INTO simulation_results (simulation_id, payload, created_at) "
@@ -99,7 +117,9 @@ def apply_recommendation(rec_id: str) -> ApplyResult:
         )
 
     _rescore_pending(rec["simulation_id"], mutated, seeds, result["resilience_score_after"])
-    rec["status"] = "approved"
+    # `rec` was read before the update, so mirror the decision onto the payload
+    # the caller gets back rather than returning a stale row.
+    rec.update(_decision(rec_id))
     baseline = {aid: a["status"] for aid, a in mutated["assets"].items()}
     return ApplyResult(
         recommendation=rec,
@@ -151,11 +171,13 @@ def _rescore_pending(
 
 
 @router.post("/{rec_id}/reject", response_model=Recommendation)
-def reject_recommendation(rec_id: str) -> Recommendation:
+def reject_recommendation(rec_id: str, actor: str = DEMO_OPERATOR) -> Recommendation:
     rec = _load(rec_id)
     with connect() as conn:
         conn.execute(
-            "UPDATE recommendations SET status = 'rejected' WHERE id = ?", (rec_id,)
+            "UPDATE recommendations SET status = 'rejected', decided_by = ?, "
+            "decided_at = datetime('now') WHERE id = ?",
+            (actor, rec_id),
         )
-    rec["status"] = "rejected"
+    rec.update(_decision(rec_id))
     return rec

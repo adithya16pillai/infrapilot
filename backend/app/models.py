@@ -116,6 +116,8 @@ class Recommendation(BaseModel):
     rationale: str
     status: str
     graph_mutation: dict[str, Any]
+    decided_by: str | None = None
+    decided_at: str | None = None
 
 
 class SimulationDetail(BaseModel):

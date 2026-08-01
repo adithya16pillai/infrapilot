@@ -72,7 +72,7 @@ graph state it produced, `/city?asset=<id>` opens that asset's detail sheet, and
 | 1:20 | "The agent chose which analyses to run" | Type *What is our biggest single point of failure?* — it runs `graph_metrics` **only**, no cascade. Same agent, different plan. |
 | 1:50 | Supply chain | Open the Control Centre. The same-severity flagged package outranks the Data Centre's because its cascade reaches the Hospital. |
 | 2:15 | Approve *Segment Control Centre / Substation A control plane* | Score climbs **43 → 57**. Approve two more: **→ 68**. "The AI recommends. The human approves. Nothing touches live systems." |
-| 2:45 | `/dashboard` | Posture, trend, pending approvals, impact-ranked supply chain risks. |
+| 2:45 | Dashboard | Posture, status mix, pending approvals, impact-ranked supply chain risks. |
 
 Hit **Reset city** between runs.
 
@@ -182,8 +182,8 @@ Nothing in the demo path needs the network. Each integration fails soft:
 ## Tests
 
 ```bash
-cd backend  && python -m pytest -q      # 29 passed
-cd frontend && npx playwright test      # 9 passed
+cd backend  && python -m pytest -q      # 32 passed
+cd frontend && npx playwright test      # 10 passed
 ```
 
 The Playwright suite **is** the demo rehearsal — it drives the exact click path
@@ -220,6 +220,36 @@ overstates cascades.
 
 ## Known gaps
 
+Scoring, propagation and the confidence method are documented in full — including
+their simplifications — in [docs/SCORING.md](docs/SCORING.md).
+
+**Modelling**
+- Degraded assets do not propagate; only failed suppliers exert pressure. This
+  makes cascades conservative, never overstated.
+- `single_points_of_failure` uses articulation points on the *undirected*
+  projection, so it ignores dependency direction. The Hospital shows up because
+  the Backup Generator reaches the graph only through it. For "what hurts most",
+  seed the cascade at each asset and compare blast radius.
+- Betweenness is a structural hint about flow concentration, not a claim about
+  operational importance.
+- Mitigation costs are indicative planning figures assigned per mutation type,
+  not quotes. `gain_per_10k` is only as good as those constants — the ordering
+  logic is the contribution, the numbers are placeholders.
+- Population impact is the resilience delta restated on a population scale, not
+  an independent measurement.
+
+**Security posture of this build**
+- No authentication. `POST /api/simulate` and `POST /api/reset` are unauthenticated
+  and unbounded; simulate can spend Anthropic tokens. Fine for a single-operator
+  demo on localhost, not for anything exposed.
+- Decisions record `decided_by` / `decided_at`, but with no auth the actor is a
+  placeholder. Wiring real auth makes it the authenticated user.
+- Untrusted third-party text (OSSPrey `behaviour`, package names) is fenced and
+  the planner is instructed to treat it as inert data before it reaches the
+  model. That is defence in depth, not a proof — an agent with tools and
+  attacker-influenced input deserves a red-team pass before production.
+
+**Scope**
 - Seed data only. No real SCADA/OT telemetry — that is the roadmap, not a claim.
 - No auth or multi-tenancy; single demo workspace.
 - Deterministic cascade only. The engine interface leaves room for Monte Carlo.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from ..db import connect, load_graph
-from ..engine.cascade import build_indexes
+from ..engine.cascade import build_indexes, population_from_score_delta
 from ..engine.scoring import resilience_score
 from ..models import AssetDetail, GraphResponse
 from ..osprey import adapter as osprey
@@ -168,12 +168,16 @@ def get_dashboard() -> dict:
             "name": highest_risk["name"],
             "criticality": highest_risk["criticality"],
         },
+        # Derived through the engine's own helper rather than a local scaling
+        # constant, so the dashboard headline can never drift from the figure
+        # the simulation itself reports.
         "estimated_population_impact": max(
-            (r["score_before"] or 0) - (r["score_after"] or 0) for r in recent
-        )
-        * 8_500
-        if recent
-        else 0,
+            (
+                population_from_score_delta(r["score_before"] or 0, r["score_after"] or 0)
+                for r in recent
+            ),
+            default=0,
+        ),
         "score_trend": [
             r["score_after"] for r in reversed(recent) if r["score_after"] is not None
         ],

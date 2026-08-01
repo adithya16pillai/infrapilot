@@ -43,6 +43,39 @@ class ToolContext:
         self.tools_used: list[str] = []
 
 
+#: Fields that originate outside our trust boundary. With OSPREY_MODE=live these
+#: carry text authored by whoever published the flagged package — an attacker can
+#: choose it. It reaches the planner as a tool result, which is exactly the
+#: channel prompt injection travels down, so it is fenced before it gets there.
+UNTRUSTED_FIELDS = ("behaviour", "package", "rank_reason")
+MAX_UNTRUSTED_CHARS = 400
+
+
+def _fence(value: Any) -> str:
+    """Neutralise untrusted text so it reads as data, never as instructions.
+
+    Strips the delimiters and role markers an injected string would use to
+    break out of its block, then wraps what remains in an explicit fence. The
+    planner's system prompt tells it to treat fenced content as inert.
+    """
+    text = str(value)[:MAX_UNTRUSTED_CHARS]
+    for marker in ("<untrusted>", "</untrusted>", "```", "\r"):
+        text = text.replace(marker, " ")
+    # Collapse newlines: injections rely on a fresh line to look authoritative.
+    text = " ".join(text.split())
+    return f"<untrusted>{text}</untrusted>"
+
+
+def _fence_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            key: (_fence(value) if key in UNTRUSTED_FIELDS else value)
+            for key, value in finding.items()
+        }
+        for finding in findings
+    ]
+
+
 def _asset_name_map(graph: dict) -> dict[str, str]:
     return {asset["name"].lower(): asset_id for asset_id, asset in graph["assets"].items()}
 
@@ -101,11 +134,10 @@ def get_inventory(ctx: ToolContext, asset_id: str) -> dict[str, Any]:
     asset = ctx.graph["assets"].get(asset_id)
     if asset is None:
         raise ValueError(f"Unknown asset: {asset_id}")
-    return {
-        "asset_id": asset_id,
-        "name": asset["name"],
-        "software_inventory": asset.get("software_inventory", {}),
-    }
+    inventory = dict(asset.get("software_inventory", {}))
+    if inventory.get("packages"):
+        inventory["packages"] = [_fence(pkg) for pkg in inventory["packages"]]
+    return {"asset_id": asset_id, "name": asset["name"], "software_inventory": inventory}
 
 
 def osprey_scan(ctx: ToolContext, asset_id: str | None = None) -> dict[str, Any]:
@@ -114,8 +146,9 @@ def osprey_scan(ctx: ToolContext, asset_id: str | None = None) -> dict[str, Any]
         findings = osprey.scan_asset(ctx.graph, asset_id)
     else:
         findings = osprey.scan_all(ctx.graph)
+    # The UI renders the real text; the planner only ever sees a fenced copy.
     ctx.findings = findings
-    return {"mode": osprey.mode(), "findings": findings}
+    return {"mode": osprey.mode(), "findings": _fence_findings(findings)}
 
 
 def rank_mitigations(ctx: ToolContext) -> dict[str, Any]:

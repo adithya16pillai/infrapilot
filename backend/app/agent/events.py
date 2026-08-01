@@ -29,7 +29,22 @@ def _now() -> str:
 
 
 def next_seq(simulation_id: str) -> int:
-    current = _seq_counters.get(simulation_id, 0) + 1
+    """Next sequence number, recovering from the database on a cold counter.
+
+    The in-memory counter is a cache, not the source of truth. After a restart
+    (or in a fresh worker) it is empty, and seeding from 0 would collide with
+    rows already persisted for that simulation and silently drop events on the
+    UNIQUE(simulation_id, seq) constraint.
+    """
+    current = _seq_counters.get(simulation_id)
+    if current is None:
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(seq) AS top FROM simulation_events WHERE simulation_id = ?",
+                (simulation_id,),
+            ).fetchone()
+        current = (row["top"] or 0) if row else 0
+    current += 1
     _seq_counters[simulation_id] = current
     return current
 

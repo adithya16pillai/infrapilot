@@ -230,15 +230,25 @@ def _critical_path(
     return best_path
 
 
-def _population_impact(score_before: int, score_after: int) -> int:
+def population_from_score_delta(score_before: int, score_after: int) -> int:
     """Residents affected, as the share of critical-service capacity lost.
 
     Bounded by CITY_POPULATION by construction, and directly explainable:
     "the city lost 41% of its critical service capacity, so ~348,000 residents
     see a degraded or unavailable service".
+
+    Note this is a *restatement* of the resilience delta on a population scale,
+    not an independent measurement — it carries no information the score does
+    not. It exists because "348,000 residents" lands with an audience in a way
+    that "41 points" does not. Anywhere this figure is needed, call this
+    function; do not re-derive it from a scaling constant.
     """
     lost_fraction = max(0, score_before - score_after) / 100
     return int(round(CITY_POPULATION * lost_fraction))
+
+
+# Kept as a private alias so the call site inside run_cascade reads naturally.
+_population_impact = population_from_score_delta
 
 
 def _affected_services(newly_impacted: list[str], statuses: dict[str, str]) -> list[str]:

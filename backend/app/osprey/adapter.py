@@ -84,7 +84,6 @@ def scan_asset(graph: dict, asset_id: str) -> list[dict[str, Any]]:
             }
         )
 
-    _persist(findings)
     return findings
 
 
@@ -143,17 +142,6 @@ def impact_comparison(graph: dict) -> dict[str, Any] | None:
             ),
         }
     return None
-
-
-def _persist(findings: list[dict[str, Any]]) -> None:
-    import json
-
-    with connect() as conn:
-        for finding in findings:
-            conn.execute(
-                "UPDATE supply_chain_findings SET operational_impact = ?, chain = ? WHERE id = ?",
-                (finding["operational_impact"], json.dumps(finding["chain"]), finding["id"]),
-            )
 
 
 def findings_summary(graph: dict, asset_id: str) -> dict[str, Any]:

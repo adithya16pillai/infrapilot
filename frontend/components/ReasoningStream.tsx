@@ -47,7 +47,14 @@ export function ReasoningStream({
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      {/* The stream updates while focus stays elsewhere; without a live
+          region a screen-reader user gets no signal that the agent is working. */}
+      <div
+        className="flex-1 overflow-y-auto p-3"
+        aria-live="polite"
+        aria-busy={running}
+        aria-label="Agent investigation steps"
+      >
         {events.length === 0 && !running && !error && (
           <p className="px-1 py-6 text-center text-[13px] leading-relaxed text-neutral-600">
             Pick a scenario or ask a question.

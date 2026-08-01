@@ -18,6 +18,9 @@ from ..models import SimulateAccepted, SimulateRequest, SimulationDetail, Simula
 
 router = APIRouter(prefix="/api", tags=["simulate"])
 
+#: Strong references to in-flight planner tasks (see simulate() below).
+_RUNNING: set[asyncio.Task] = set()
+
 
 def _new_id() -> str:
     return f"sim_{secrets.token_hex(8)}"
@@ -39,8 +42,14 @@ async def simulate(request: SimulateRequest) -> SimulateAccepted:
         )
 
     # The planner is synchronous (SQLite + HTTP); run it off the event loop so
-    # the SSE endpoint stays responsive while it works.
-    asyncio.create_task(asyncio.to_thread(_run_investigation, simulation_id, request.query))
+    # the SSE endpoint stays responsive while it works. The reference is held
+    # until completion because asyncio only keeps a weak reference to tasks --
+    # an unreferenced one can be collected mid-flight and the run vanishes.
+    task = asyncio.create_task(
+        asyncio.to_thread(_run_investigation, simulation_id, request.query)
+    )
+    _RUNNING.add(task)
+    task.add_done_callback(_RUNNING.discard)
     return SimulateAccepted(simulation_id=simulation_id, status="planning")
 
 

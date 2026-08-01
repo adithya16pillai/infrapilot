@@ -51,7 +51,8 @@
       "Bash(curl -s http://127.0.0.1:8000/api/dashboard)",
       "Bash(timeout 300 npx playwright test)",
       "Bash(npx eslint *)",
-      "Bash(curl -s http://127.0.0.1:8000/api/graph)"
+      "Bash(curl -s http://127.0.0.1:8000/api/graph)",
+      "Bash(sed -i 's/from app.recommendations.rules import JITTER_STEPS, _confidence/from app.recommendations.rules import JITTER_PROFILES, _confidence/; s/assert 0.0 not in JITTER_STEPS/assert all\\(delta != 0.0 for _mode, delta in JITTER_PROFILES\\)/' tests/test_api.py)"
     ]
   }
 }
