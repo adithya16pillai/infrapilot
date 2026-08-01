@@ -9,6 +9,35 @@ behind a human approval gate.
 Built for the Cursor Cybersecurity London hackathon.
 
 ---
+## Tech Stack
+
+### Frontend:
+
+Next.js 14+ (App Router) with TypeScript strict mode
+TailwindCSS + shadcn/ui for components
+React Flow (@xyflow/react) for the infrastructure graph
+Framer Motion for cascade animations and score count-ups
+recharts for dashboard charts
+supabase-js (realtime reads only, for streaming agent events)
+Deployed on Vercel
+
+### Backend:
+
+FastAPI on Python 3.11+ with Pydantic v2
+NetworkX for the graph algorithms (cascade BFS, articulation points, betweenness centrality)
+uv as package manager
+Anthropic API for the agent loop and rationale text
+
+### Database
+
+Supabase (Postgres + Realtime) holding assets, dependencies, simulations, events, results, recommendations, and supply chain findings
+
+### Partner tech:
+
+Modal: runs the heavy compute, simulate_cascade and graph_metrics as serverless functions, with a keep-warm ping and a USE_MODAL=false local fallback
+Overmind: the agent orchestration layer on top of your tool-use loop, planning which analyses to run per query
+OSSPrey: supply chain layer, scanning each asset's software inventory for malicious packages, re-ranked by operational impact via your cascade engine, with OSPREY_MODE=mock|live
+
 
 ## Run the development server
 
@@ -191,155 +220,3 @@ directly.
 identical streams, the UI cannot tell which one ran — which is also why killing
 the LLM mid-demo degrades invisibly.
 
-### Claude — the planner itself
-
-```bash
-cp backend/.env.example backend/.env   # then set ANTHROPIC_API_KEY
-python verify_planner.py               # four real queries, fails loudly on regression
-```
-
-Without a key the deterministic router plans instead and emits the same events.
-`tests/test_planner_llm.py` proves the tool-use loop against a scripted client,
-so the code is verified even before a key exists.
-
----
-
-## Navigation
-
-| Route | What it is |
-|---|---|
-| `/` | Dashboard — posture, status mix, top risks, pending approvals, recent runs. Every section deep-links. |
-| `/city` | The graph. Launch scenarios, watch the agent, approve mitigations. |
-| `/assets` | All 12 assets: criticality, dependants, findings, status. |
-| `/approvals` | Every mitigation awaiting a decision, best value first. |
-| `/risks` | Supply chain findings, the OSSPrey explainer, and the impact comparison. |
-| `/simulations` | Full history. Click any run to replay it on the graph. |
-| `/health` | Which execution path is live for each integration. |
-
-Deep links carry state: `/city?simulation=<id>` replays a past run in the exact
-graph state it produced, `/city?asset=<id>` opens that asset's detail sheet, and
-`/city?simulation=<id>&rec=<id>` highlights a mitigation.
-
-> Profile and Sign out are presentational. This build ships no authentication (a
-> stated non-goal) — Sign out is deliberately disabled rather than faking a
-> session.
-
----
-
-## The demo (3 minutes)
-
-| Time | Beat | What you see |
-|---|---|---|
-| 0:00 | Landing | 12 interdependent assets. Resilience **84** — not 100, because the city carries five known posture issues. |
-| 0:20 | Click *Ransomware on Control Centre* | The investigation streams step by step: resolve → cascade → metrics → rank. |
-| 0:50 | The cascade lands | Control Centre → Substation A → Traffic Management fail. Hospital, Emergency Services and the Water Plant degrade. **84 → 43**. ~348,000 residents affected. |
-| 1:20 | "The agent chose which analyses to run" | Type *What is our biggest single point of failure?* — `graph_metrics` only, no cascade. |
-| 1:50 | Supply chain | Open `/risks`. Same severity, 3.4× different priority, because one cascade reaches the Hospital. |
-| 2:15 | Approve the top mitigation | **43 → 57**. Approve two more: **→ 68**. "The AI recommends. The human approves. Nothing touches live systems." |
-| 2:45 | Dashboard | Posture, status mix, pending approvals, impact-ranked risks. |
-
-Hit **Reset city** between runs.
-
-### The demo numbers are measured, not chosen
-
-The PRD sketched 84 → 61 → 88 before the engine existed. The engine says
-**84 → 43 → 68**, so the script quotes the engine. `python -m seed.calibrate`
-prints them and `tests/test_cascade.py` pins them, so a seed edit fails a test
-rather than surprising you on stage.
-
----
-
-## Architecture
-
-```
-Next.js :3000  ──REST──▶  FastAPI :8000  ──▶ app/engine/  (pure NetworkX)
-     ▲                         │
-     └────── SSE ──────────────┤──▶ app/agent/   Claude tool-use loop │ rule router
-      /simulations/{id}/stream ├──▶ app/osprey/  mock │ live
-                               └──▶ SQLite       (the PRD's Postgres schema, verbatim)
-```
-
-Scoring, propagation and the confidence method — including their
-simplifications — are documented in **[docs/SCORING.md](docs/SCORING.md)**.
-
----
-
-## Degradation
-
-Nothing on the demo path needs the network.
-
-| If this is unavailable | What happens |
-|---|---|
-| `ANTHROPIC_API_KEY` unset, or the API errors mid-run | Deterministic router plans the investigation and emits an identical event stream. |
-| Modal | `USE_MODAL=false` runs the same engine module in-process. |
-| OSSPrey API | `OSPREY_MODE=mock` returns findings in the live API's shape. |
-| Overmind | The built-in planner covers the same interface. |
-| SSE connection drops | The hook falls back to polling `/events`. |
-
----
-
-## Tests
-
-```bash
-cd backend  && python -m pytest -q      # 32 passed
-cd frontend && npx playwright test      # 10 passed
-```
-
-The Playwright suite **is** the demo rehearsal — it drives the exact click path
-at 1280×720 and asserts the score lands on 43, then on 43 + the claimed gain.
-Run it before walking to the stage.
-
-Notable cases: `test_cascade_control_centre` (golden),
-`test_recommendation_gain_is_real`, `test_no_autonomous_apply_path` (fingerprints
-the graph and exercises every other route rather than grepping source),
-`test_untrusted_finding_text_is_fenced_before_it_reaches_the_planner`,
-`test_decisions_are_attributable`.
-
----
-
-## Secrets
-
-No credentials are committed. `backend/.env.example` is the only env file in the
-repo and its values are blank.
-
-- `.gitignore` covers `.env*` (except `.env.example`), `*.pem`, `*.key`, `*.p12`,
-  `id_rsa*`, `credentials.json`, `secrets.json`, `.netrc`, `*.db`, `*.log` and
-  `node_modules/`.
-- The API key is read from the environment at startup and is never logged,
-  echoed in a response, or written to the database.
-- Error strings that reach `simulations.error` and the SSE stream pass through a
-  redactor that strips credential-shaped tokens — that is the one path where
-  upstream exception text could carry a header into something a browser renders
-  and a database keeps.
-
----
-
-## Known gaps
-
-**Modelling**
-- Degraded assets do not propagate; only failed suppliers exert pressure. This
-  makes cascades conservative, never overstated.
-- `single_points_of_failure` uses articulation points on the *undirected*
-  projection, so it ignores dependency direction. The Hospital appears because
-  the Backup Generator reaches the graph only through it. For "what hurts most",
-  seed the cascade at each asset and compare blast radius.
-- Betweenness is a structural hint about flow concentration, not a claim about
-  operational importance.
-- Mitigation costs are indicative planning figures assigned per mutation type,
-  not quotes. The ordering logic is the contribution; the numbers are placeholders.
-- Population impact is the resilience delta restated on a population scale, not
-  an independent measurement.
-
-**Security posture of this build**
-- No authentication. `POST /api/simulate` and `POST /api/reset` are
-  unauthenticated and unbounded, and simulate can spend Anthropic tokens. Fine
-  for a single-operator demo on localhost, not for anything exposed.
-- Decisions record an actor, but with no auth it is a placeholder.
-- Untrusted third-party text is fenced and the planner told to treat it as data.
-  That is defence in depth, not a proof — an agent with tools and
-  attacker-influenced input deserves a red-team pass before production.
-
-**Scope**
-- Seed data only. No real SCADA/OT telemetry — that is the roadmap, not a claim.
-- Deterministic cascade only; the engine interface leaves room for Monte Carlo.
-- Desktop only, 1280×720 target.
